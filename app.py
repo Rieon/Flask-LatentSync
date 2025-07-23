@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 import uuid
+from flask import send_from_directory
 
 app = Flask(__name__)
 
@@ -63,6 +64,10 @@ def process_media():
         return jsonify({'error': str(e)}), 500
 
     return jsonify({'video_out_path': video_out_path}), 200
+
+@app.route('/uploads/<path:filename>')
+def serve_uploaded_file(filename):
+    return send_from_directory(BASE_DIR, filename)
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True, host="0.0.0.0", port=5001)
