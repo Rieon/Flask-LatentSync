@@ -152,6 +152,10 @@ def process_media():
         'polling_result_path': video_out_path
     }), 200
 
+@app.route('/uploads/<path:filename>')
+def serve_uploaded_file(filename):
+    return send_from_directory(BASE_DIR, filename)
+
 if __name__ == '__main__':
     # Запускаем worker в отдельном потоке
     worker_thread = threading.Thread(target=worker, daemon=True)
