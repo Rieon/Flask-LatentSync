@@ -3,6 +3,7 @@ import os
 from werkzeug.utils import secure_filename
 import uuid
 from flask import send_from_directory
+import requests
 
 app = Flask(__name__)
 
@@ -13,14 +14,23 @@ os.makedirs(BASE_DIR, exist_ok=True)
 # Импорт вашей функции
 from scripts.inference import run_inference  # Замените на актуальный путь
 
+def download_file(url, save_path):
+    response = requests.get(url, stream=True)
+    if response.status_code != 200:
+        raise Exception(f"Failed to download {url}: {response.status_code}")
+    with open(save_path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
 @app.route('/process', methods=['POST'])
 def process_media():
-    # Проверка обязательных параметров
     name = request.form.get('name')
     inference_steps = request.form.get('inference_steps')
     guidance_scale = request.form.get('guidance_scale', default=1.0)
+    audio_url = request.form.get('audio_url')
+    video_url = request.form.get('video_url')
 
-    if not name or 'audio' not in request.files or 'video' not in request.files:
+    if not name or not audio_url or not video_url:
         return jsonify({'error': 'Missing required fields'}), 400
 
     try:
@@ -29,24 +39,24 @@ def process_media():
     except ValueError:
         return jsonify({'error': 'Invalid parameter types'}), 400
 
-    # Создание директории для имени
     save_dir = os.path.join(BASE_DIR, secure_filename(name))
     os.makedirs(save_dir, exist_ok=True)
 
-    # Сохранение файлов
-    audio_file = request.files['audio']
-    video_file = request.files['video']
+    # Скачивание файлов
+    try:
+        audio_filename = f"audio_{uuid.uuid4().hex}.mp3"
+        video_filename = f"video_{uuid.uuid4().hex}.mp4"
 
-    audio_path = os.path.join(save_dir, secure_filename(audio_file.filename))
-    video_path = os.path.join(save_dir, secure_filename(video_file.filename))
+        audio_path = os.path.join(save_dir, audio_filename)
+        video_path = os.path.join(save_dir, video_filename)
 
-    audio_file.save(audio_path)
-    video_file.save(video_path)
+        download_file(audio_url, audio_path)
+        download_file(video_url, video_path)
+    except Exception as e:
+        return jsonify({'error': f'Failed to download media: {str(e)}'}), 400
 
-    # Генерация пути для выходного видео
     video_out_path = os.path.join(save_dir, f"output_{uuid.uuid4().hex}.mp4")
 
-    # Вызов инференса
     try:
         run_inference(
             unet_config_path="configs/unet/stage2.yaml",
